@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
+from fastapi import HTTPException
+from google.api_core.exceptions import InternalServerError, ResourceExhausted, ServiceUnavailable
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_google_genai.chat_models import GoogleAPIError, GoogleRateLimitError
 
 from app.core.config import settings
 
@@ -43,11 +47,19 @@ SYSTEM_INSTRUCTIONS: str = (
     "de formules marketing."
 )
 
-NETWORK_FALLBACK: str = (
-    "Je rencontre une brève interférence réseau. Pouvons-nous reprendre dans un instant ?"
-)
-
 session_history: dict[str, list[BaseMessage]] = {}
+
+_RETRYABLE_API_ERRORS = (
+    ResourceExhausted,
+    ServiceUnavailable,
+    InternalServerError,
+    GoogleRateLimitError,
+    GoogleAPIError,
+)
+_SATURATED_DETAIL = (
+    "Le réseau est temporairement saturé. Veuillez patienter un instant avant de réessayer."
+)
+_UNEXPECTED_DETAIL = "Une erreur inattendue est survenue."
 
 
 class AgentConfigurationError(RuntimeError):
@@ -64,7 +76,7 @@ class LifeCoachAgent:
         self._llm = ChatGoogleGenerativeAI(
             model="gemini-flash-latest",
             temperature=0.4,
-            max_retries=3,
+            max_retries=1,
             google_api_key=settings.GOOGLE_API_KEY,
         )
 
@@ -89,27 +101,37 @@ class LifeCoachAgent:
         user_message: str,
     ) -> str:
         """Invoque Gemini avec la mémoire de session de l'utilisateur."""
-        try:
-            if self._llm is None or not settings.GOOGLE_API_KEY:
-                raise AgentConfigurationError("GOOGLE_API_KEY est manquante.")
+        if self._llm is None or not settings.GOOGLE_API_KEY:
+            raise AgentConfigurationError("GOOGLE_API_KEY est manquante.")
 
-            user_id: str = str(user_profile.get("id") or "").strip()
-            if not user_id:
-                raise ValueError("Le profil utilisateur doit contenir un identifiant.")
+        user_id: str = str(user_profile.get("id") or "").strip()
+        if not user_id:
+            raise HTTPException(status_code=500, detail=_UNEXPECTED_DETAIL)
 
-            if user_id not in session_history:
-                session_history[user_id] = [SystemMessage(content=SYSTEM_INSTRUCTIONS)]
+        if user_id not in session_history:
+            session_history[user_id] = [SystemMessage(content=SYSTEM_INSTRUCTIONS)]
 
-            history = session_history[user_id]
-            pending: list[BaseMessage] = [*history, HumanMessage(content=user_message)]
-            response = await self._llm.ainvoke(pending)
-            advice: str = self._message_text(response.content).strip()
-            if not advice:
-                raise ValueError("Réponse Gemini vide.")
+        history = session_history[user_id]
+        pending: list[BaseMessage] = [*history, HumanMessage(content=user_message)]
+        response = None
+        for attempt in range(3):
+            try:
+                response = await self._llm.ainvoke(pending)
+                break
+            except _RETRYABLE_API_ERRORS as error:
+                if attempt == 2:
+                    status_code = (
+                        429
+                        if isinstance(error, (ResourceExhausted, GoogleRateLimitError))
+                        else 502
+                    )
+                    raise HTTPException(status_code=status_code, detail=_SATURATED_DETAIL) from error
+                await asyncio.sleep(2 ** attempt)
 
-            history.append(HumanMessage(content=user_message))
-            history.append(AIMessage(content=advice))
-            return advice
-        except Exception as e:
-            print(f"Erreur Gemini: {e}")
-            return NETWORK_FALLBACK
+        advice: str = self._message_text(response.content).strip() if response is not None else ""
+        if not advice:
+            raise HTTPException(status_code=500, detail=_UNEXPECTED_DETAIL)
+
+        history.append(HumanMessage(content=user_message))
+        history.append(AIMessage(content=advice))
+        return advice

@@ -7,14 +7,10 @@ n'est figé dans le code source.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Annotated
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
-
-_PROJECT_ROOT: Path = Path(__file__).resolve().parents[3]
-_ENV_FILE: Path = _PROJECT_ROOT / ".env"
 
 
 class Settings(BaseSettings):
@@ -26,7 +22,7 @@ class Settings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file=_ENV_FILE if _ENV_FILE.is_file() else None,
+        env_file="../.env",
         env_file_encoding="utf-8",
         extra="ignore",
         case_sensitive=True,

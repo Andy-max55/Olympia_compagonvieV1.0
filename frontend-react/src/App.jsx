@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 
 const USER_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-const CHAT_URL = "http://127.0.0.1:8080/api/chat/";
+const CHAT_URL = "http://127.0.0.1:8080/api/chat";
 
 const DISPLAY_FONT = { fontFamily: '"Cormorant Garamond", Georgia, serif' };
 const UI_FONT = { fontFamily: "Outfit, system-ui, sans-serif" };
@@ -202,24 +202,31 @@ function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: USER_ID, message }),
       });
-      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const detail = errorData?.detail;
+        throw new Error(typeof detail === "string" && detail.trim() ? detail : "Erreur réseau");
+      }
+      const data = await response.json();
       if (currentRequest !== requestId.current) {
         return;
       }
-      if (!response.ok || typeof data?.advice !== "string" || !data.advice.trim()) {
-        throw new Error("api_error");
+      if (typeof data?.advice !== "string" || !data.advice.trim()) {
+        throw new Error("Erreur réseau");
       }
       setMessages((current) => [...current, { role: "olympia", text: data.advice.trim() }]);
     } catch (error) {
       if (currentRequest !== requestId.current) {
         return;
       }
-      console.error("Olympia : échec de la requête", error);
+      setIsLoading(false);
+      const text = error instanceof Error && error.message ? error.message : "Erreur réseau";
       setMessages((current) => [
         ...current,
         {
           role: "olympia",
-          text: "Je n'arrive pas à joindre le coach pour le moment. Réessayez dans un instant.",
+          text,
+          isError: true,
         },
       ]);
     } finally {
@@ -400,9 +407,17 @@ function App() {
                   </div>
                 </article>
               ) : (
-                <article key={`${message.role}-${index}`} className="flex justify-start">
+                <article
+                  key={`${message.role}-${index}`}
+                  className="flex justify-start"
+                  role={message.isError ? "alert" : undefined}
+                >
                   <div className="max-w-[80%] rounded-3xl border border-white/[0.05] bg-white/[0.03] px-5 py-3 text-sm font-light leading-relaxed text-gray-200 backdrop-blur-md">
-                    <p className="m-0 select-text whitespace-pre-wrap">{message.text}</p>
+                    <p
+                      className={`m-0 select-text whitespace-pre-wrap${message.isError ? " text-red-400" : ""}`}
+                    >
+                      {message.text}
+                    </p>
                   </div>
                 </article>
               ),

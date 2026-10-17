@@ -1,6 +1,5 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 from app.api.endpoints.chat import router as chat_router
 from app.api.endpoints.users import router as users_router
@@ -22,7 +21,7 @@ app = FastAPI(
 # Configuration stricte de la sécurité CORS (Empêche les accès non autorisés au backend)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -30,6 +29,3 @@ app.add_middleware(
 
 app.include_router(users_router, prefix="/api/users", tags=["Users"])
 app.include_router(chat_router, prefix="/api/chat", tags=["Chat"])
-
-# Montage en dernier : les routes /api/* restent prioritaires.
-app.mount("/", StaticFiles(directory="../frontend", html=True), name="frontend")

@@ -7,3 +7,4 @@ email-validator
 sqlalchemy
 langchain
 langchain-google-genai
+google-api-core
