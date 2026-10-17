@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 
 const USER_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-const CHAT_URL = "http://127.0.0.1:8080/api/chat";
+const CHAT_URL = "https://olympia-backend-4lw9.onrender.com/api/chat";
 
 const DISPLAY_FONT = { fontFamily: '"Cormorant Garamond", Georgia, serif' };
 const UI_FONT = { fontFamily: "Outfit, system-ui, sans-serif" };
