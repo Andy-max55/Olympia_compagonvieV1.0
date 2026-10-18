@@ -94,8 +94,9 @@ class LifeCoachAgent:
         self,
         user_profile: dict[str, Any],
         user_message: str,
+        memory_context: str = "",
     ) -> str:
-        """Invoque Gemini avec la mémoire de session de l'utilisateur."""
+        """Invoque Gemini avec la mémoire de session et, s'il y en a, les faits durables."""
         if self._llm is None or not settings.GOOGLE_API_KEY:
             raise AgentConfigurationError("GOOGLE_API_KEY est manquante.")
 
@@ -107,7 +108,15 @@ class LifeCoachAgent:
             session_history[user_id] = [SystemMessage(content=SYSTEM_INSTRUCTIONS)]
 
         history = session_history[user_id]
-        pending: list[BaseMessage] = [*history, HumanMessage(content=user_message)]
+        prior_turns = [message for message in history if not isinstance(message, SystemMessage)]
+        system_text = SYSTEM_INSTRUCTIONS
+        if memory_context.strip():
+            system_text = f"{SYSTEM_INSTRUCTIONS}\n\n{memory_context.strip()}"
+        pending: list[BaseMessage] = [
+            SystemMessage(content=system_text),
+            *prior_turns,
+            HumanMessage(content=user_message),
+        ]
         response = None
         for attempt in range(3):
             try:
