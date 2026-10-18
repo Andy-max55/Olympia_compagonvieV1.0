@@ -87,6 +87,28 @@
   animation: fade-in-up 0.45s ease-out both;
 }
 
+html,
+body,
+#root {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.olympia-markdown,
+.olympia-markdown p,
+.olympia-markdown li,
+.olympia-markdown a,
+.olympia-markdown code,
+.olympia-markdown pre {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.olympia-markdown pre {
+  overflow-x: auto;
+}
+
 .olympia-markdown strong {
   font-weight: 600;
 }

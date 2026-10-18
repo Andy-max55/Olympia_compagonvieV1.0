@@ -60,6 +60,33 @@ const PROFILE_ACTIONS = [
   { id: "logout", label: "Déconnexion", icon: LogOut },
 ];
 
+function formatMessageTime(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  const clockParts = new Intl.DateTimeFormat("fr-FR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const hour = clockParts.find((part) => part.type === "hour")?.value ?? "00";
+  const minute = clockParts.find((part) => part.type === "minute")?.value ?? "00";
+  const clock = `${hour}:${minute}`;
+  const now = new Date();
+  const isToday =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate();
+  if (isToday) {
+    return `À ${clock}`;
+  }
+  const dayParts = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short" }).formatToParts(date);
+  const day = dayParts.find((part) => part.type === "day")?.value ?? "";
+  const month = dayParts.find((part) => part.type === "month")?.value ?? "";
+  return `Le ${day} ${month} à ${clock}`;
+}
+
 function extractQuestions(text) {
   const plain = text
     .replace(/```[\s\S]*?```/g, " ")
@@ -270,7 +297,7 @@ function App() {
 
     const currentRequest = requestId.current + 1;
     requestId.current = currentRequest;
-    setMessages((current) => [...current, { role: "user", text: message }]);
+    setMessages((current) => [...current, { role: "user", text: message, sentAt: new Date().toISOString() }]);
     setInputValue("");
     clearSelectedFile();
     setIsRecording(false);
@@ -294,7 +321,10 @@ function App() {
       if (typeof data?.advice !== "string" || !data.advice.trim()) {
         throw new Error("Erreur réseau");
       }
-      setMessages((current) => [...current, { role: "olympia", text: data.advice.trim() }]);
+      setMessages((current) => [
+        ...current,
+        { role: "olympia", text: data.advice.trim(), sentAt: new Date().toISOString() },
+      ]);
     } catch (error) {
       if (currentRequest !== requestId.current) {
         return;
@@ -307,6 +337,7 @@ function App() {
           role: "olympia",
           text,
           isError: true,
+          sentAt: new Date().toISOString(),
         },
       ]);
     } finally {
@@ -332,7 +363,7 @@ function App() {
 
   return (
     <div
-      className="relative flex h-screen w-screen select-none overflow-hidden bg-[#0a0a0a] text-white"
+      className="relative flex h-dvh w-full max-w-full select-none overflow-hidden bg-[#0a0a0a] text-white"
       style={UI_FONT}
     >
       <div
@@ -449,8 +480,8 @@ function App() {
         </ul>
       </aside>
 
-      <main className="relative z-10 flex h-full flex-1 flex-col overflow-hidden">
-        <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col justify-between overflow-y-auto px-4 py-6 md:px-8">
+      <main className="relative z-10 flex h-full min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="mx-auto flex w-full min-w-0 max-w-4xl flex-1 flex-col justify-between overflow-hidden px-4 py-6 md:px-8">
         <header className="flex w-full items-start justify-between">
           <div>
             <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-red-500">Préparation physique</p>
@@ -490,27 +521,39 @@ function App() {
           >
             {messages.map((message, index) =>
               message.role === "user" ? (
-                <article key={`${message.role}-${index}`} className="flex justify-end">
-                  <div className="max-w-[80%] rounded-3xl border border-red-500/20 bg-red-900/20 px-5 py-3 text-sm font-light leading-relaxed text-gray-100">
-                    <p className="m-0 select-text whitespace-pre-wrap">{message.text}</p>
+                <article key={`${message.role}-${index}`} className="flex min-w-0 justify-end">
+                  <div className="flex w-full min-w-0 max-w-full flex-col items-end gap-1.5 sm:max-w-[80%]">
+                    <div className="max-w-full rounded-3xl border border-red-500/20 bg-red-900/20 px-5 py-3 text-sm font-light leading-relaxed text-gray-100">
+                      <p className="m-0 select-text whitespace-pre-wrap [overflow-wrap:anywhere]">{message.text}</p>
+                    </div>
+                    {message.sentAt ? (
+                      <time dateTime={message.sentAt} className="px-2 text-[11px] text-gray-500">
+                        {formatMessageTime(message.sentAt)}
+                      </time>
+                    ) : null}
                   </div>
                 </article>
               ) : (
                 <article
                   key={`${message.role}-${index}`}
-                  className="flex justify-start"
+                  className="flex min-w-0 justify-start"
                   role={message.isError ? "alert" : undefined}
                 >
-                  <div className="flex w-full max-w-[80%] flex-col gap-3">
-                    <div className="rounded-3xl border border-white/[0.05] bg-white/[0.03] px-5 py-3 text-sm leading-relaxed text-gray-200 backdrop-blur-md">
+                  <div className="flex w-full min-w-0 max-w-full flex-col gap-3 sm:max-w-[80%]">
+                    <div className="max-w-full rounded-3xl border border-white/[0.05] bg-white/[0.03] px-5 py-3 text-sm leading-relaxed text-gray-200 backdrop-blur-md">
                       {message.isError ? (
-                        <p className="m-0 select-text whitespace-pre-wrap text-red-400">{message.text}</p>
+                        <p className="m-0 select-text whitespace-pre-wrap text-red-400 [overflow-wrap:anywhere]">{message.text}</p>
                       ) : (
                         <OlympiaMarkdown text={message.text} />
                       )}
                     </div>
+                    {message.sentAt ? (
+                      <time dateTime={message.sentAt} className="-mt-1 px-2 text-[11px] text-gray-500">
+                        {formatMessageTime(message.sentAt)}
+                      </time>
+                    ) : null}
                     {index === messages.length - 1 && pendingQuestions.length > 0 ? (
-                      <div className="flex flex-col gap-2">
+                      <div className="flex w-full min-w-0 flex-col gap-2">
                         {pendingQuestions.map((question, questionIndex) => (
                           <input
                             key={`${questionIndex}-${question}`}
@@ -530,7 +573,7 @@ function App() {
                             }}
                             placeholder={questionPlaceholder(question)}
                             aria-label={questionPlaceholder(question)}
-                            className="w-full rounded-full border border-white/10 bg-white/[0.06] px-4 py-2.5 text-sm text-white shadow-sm placeholder:text-gray-500 focus:border-white/25 focus:outline-none"
+                            className="min-h-12 w-full max-w-full rounded-full border border-white/10 bg-white/[0.06] px-4 text-base text-white shadow-sm placeholder:text-gray-500 focus:border-white/25 focus:outline-none md:min-h-11 md:text-sm"
                           />
                         ))}
                       </div>
@@ -556,7 +599,7 @@ function App() {
           </div>
         )}
 
-        <form className="mt-auto w-full shrink-0 pb-2 pt-4" onSubmit={onSubmit}>
+        <form className="mt-auto w-full min-w-0 shrink-0 bg-[#0a0a0a]/80 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-md" onSubmit={onSubmit}>
           {selectedFile ? (
             <div className="mb-3 flex w-fit items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-3 py-1 text-sm text-gray-300">
               <Paperclip size={14} aria-hidden="true" />
@@ -571,12 +614,12 @@ function App() {
               </button>
             </div>
           ) : null}
-          <div className="flex w-full items-center gap-3 rounded-full border border-white/10 bg-white/[0.03] p-2 shadow-lg backdrop-blur-xl">
+          <div className="flex w-full min-w-0 items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] p-1.5 shadow-lg backdrop-blur-xl md:gap-3 md:p-2">
             <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelect} />
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="ml-4 shrink-0 text-gray-400 transition-colors hover:text-white"
+              className="ml-2 shrink-0 text-gray-400 transition-colors hover:text-white md:ml-4"
               aria-label="Pièce jointe"
             >
               <Paperclip size={18} strokeWidth={1.75} />
@@ -591,7 +634,7 @@ function App() {
               value={inputValue}
               onChange={(event) => setInputValue(event.target.value)}
               placeholder="Demandez à Olympia..."
-              className="flex-1 select-text bg-transparent text-white placeholder-gray-500 focus:outline-none"
+              className="min-h-12 min-w-0 flex-1 select-text bg-transparent text-base text-white placeholder-gray-500 focus:outline-none md:min-h-10 md:text-sm"
             />
             <button
               type="button"
@@ -605,7 +648,7 @@ function App() {
             <button
               type="submit"
               disabled={isLoading}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-600/90 text-white transition-colors hover:bg-red-500 disabled:opacity-40"
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-red-600/90 text-white transition-colors hover:bg-red-500 disabled:opacity-40 md:h-10 md:w-10"
               aria-label="Envoyer"
             >
               <ArrowUp size={18} strokeWidth={2} />
@@ -626,7 +669,7 @@ function App() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="settings-title"
-            className="w-[400px] rounded-2xl border border-white/10 bg-[#0f0f0f] p-6 shadow-2xl"
+            className="w-[min(400px,calc(100%-2rem))] max-w-full rounded-2xl border border-white/10 bg-[#0f0f0f] p-6 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
             <h2 id="settings-title" className="text-lg font-medium text-white">
