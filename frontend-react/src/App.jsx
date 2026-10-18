@@ -480,9 +480,9 @@ function App() {
         </ul>
       </aside>
 
-      <main className="relative z-10 flex h-full min-w-0 flex-1 flex-col overflow-hidden">
-        <div className="mx-auto flex w-full min-w-0 max-w-4xl flex-1 flex-col justify-between overflow-hidden px-4 py-6 md:px-8">
-        <header className="flex w-full items-start justify-between">
+      <main className="relative z-10 flex h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="mx-auto flex h-full w-full min-w-0 max-w-4xl flex-col px-4 md:px-8">
+        <header className="flex w-full shrink-0 items-start justify-between pt-4 md:pt-6">
           <div>
             <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-red-500">Préparation physique</p>
             <h1 className="font-serif text-5xl font-light italic" style={DISPLAY_FONT}>
@@ -495,8 +495,9 @@ function App() {
           </div>
         </header>
 
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         {messages.length === 0 ? (
-          <section className="my-auto grid w-full grid-cols-1 gap-4 py-4 md:grid-cols-2" aria-label="Suggestions">
+          <section className="grid w-full grid-cols-2 gap-2 py-3 md:my-auto md:gap-4 md:py-4" aria-label="Suggestions">
             {SUGGESTIONS.map((suggestion) => {
               const Icon = suggestion.icon;
               return (
@@ -504,18 +505,18 @@ function App() {
                   key={suggestion.title}
                   type="button"
                   onClick={() => handleSend(suggestion.subtitle)}
-                  className="min-h-[120px] cursor-pointer rounded-3xl border border-white/[0.05] bg-white/[0.03] p-6 text-left backdrop-blur-md transition-all hover:bg-white/[0.05]"
+                  className="cursor-pointer rounded-2xl border border-white/[0.05] bg-white/[0.03] p-3 text-left text-sm backdrop-blur-md transition-all hover:bg-white/[0.05] md:min-h-[120px] md:rounded-3xl md:p-6"
                 >
-                  <Icon className="text-red-500" size={22} strokeWidth={1.75} aria-hidden="true" />
-                  <h2 className="mt-4 text-white">{suggestion.title}</h2>
-                  <p className="mt-1 text-sm text-gray-400">{suggestion.subtitle}</p>
+                  <Icon className="h-4 w-4 text-red-500 md:h-[22px] md:w-[22px]" size={22} strokeWidth={1.75} aria-hidden="true" />
+                  <h2 className="mt-2 text-sm text-white md:mt-4 md:text-base">{suggestion.title}</h2>
+                  <p className="mt-1 line-clamp-3 text-xs leading-snug text-gray-400 md:text-sm">{suggestion.subtitle}</p>
                 </button>
               );
             })}
           </section>
         ) : (
           <div
-            className="flex min-h-0 w-full flex-1 flex-col gap-6 overflow-y-auto py-4"
+            className="flex w-full flex-col gap-6 py-4"
             aria-live="polite"
             aria-label="Historique de conversation"
           >
@@ -598,8 +599,9 @@ function App() {
             <div ref={messagesEndRef} />
           </div>
         )}
+        </div>
 
-        <form className="mt-auto w-full min-w-0 shrink-0 bg-[#0a0a0a]/80 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-md" onSubmit={onSubmit}>
+        <form className="flex-shrink-0 w-full min-w-0 bg-[#0a0a0a]/80 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-md" onSubmit={onSubmit}>
           {selectedFile ? (
             <div className="mb-3 flex w-fit items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-3 py-1 text-sm text-gray-300">
               <Paperclip size={14} aria-hidden="true" />
