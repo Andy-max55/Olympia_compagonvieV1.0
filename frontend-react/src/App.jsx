@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   ArrowUp,
   Clock,
@@ -21,7 +23,7 @@ const USER_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const CHAT_URL = "https://olympia-backend-4lw9.onrender.com/api/chat";
 
 const DISPLAY_FONT = { fontFamily: '"Cormorant Garamond", Georgia, serif' };
-const UI_FONT = { fontFamily: "Outfit, system-ui, sans-serif" };
+const UI_FONT = { fontFamily: 'Inter, system-ui, sans-serif' };
 
 const SUGGESTIONS = [
   {
@@ -57,6 +59,74 @@ const PROFILE_ACTIONS = [
   { id: "plan", label: "Abonnement", icon: CreditCard },
   { id: "logout", label: "Déconnexion", icon: LogOut },
 ];
+
+function extractQuestions(text) {
+  const plain = text
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/[*_~#>`]/g, "");
+  const matches = plain.match(/[^.!?\n]*\?/g) ?? [];
+  return matches
+    .map((match) =>
+      match
+        .replace(/^[\s\-*•]+/, "")
+        .replace(/^\d+[.)]\s*/, "")
+        .replace(/\s+/g, " ")
+        .trim(),
+    )
+    .filter((question) => question.length > 1 && question.endsWith("?"));
+}
+
+function questionPlaceholder(question) {
+  const start = question.replace(/\?+$/, "").trim();
+  const preview = start.length > 42 ? `${start.slice(0, 42).trimEnd()}…` : start;
+  return `Répondre à : ${preview}...`;
+}
+
+function composeOutgoingMessage(generalText, questions, answers) {
+  const replies = questions.flatMap((question, index) => {
+    const value = (answers[index] ?? "").trim();
+    return value ? [`[Réponse à "${question}"] : ${value}`] : [];
+  });
+  const general = generalText.trim();
+  if (replies.length && general) {
+    return `${replies.join("\n\n ")}\n\n [Message général] : ${general}`;
+  }
+  if (replies.length) {
+    return replies.join("\n\n ");
+  }
+  return general;
+}
+
+const MARKDOWN_COMPONENTS = {
+  p: ({ children }) => <p className="mb-3 leading-relaxed last:mb-0">{children}</p>,
+  strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
+  em: ({ children }) => <em className="italic text-gray-100">{children}</em>,
+  ul: ({ children }) => <ul className="my-3 list-disc space-y-1.5 pl-5 marker:text-gray-400">{children}</ul>,
+  ol: ({ children }) => <ol className="my-3 list-decimal space-y-1.5 pl-5 marker:text-gray-400">{children}</ol>,
+  li: ({ children }) => <li className="leading-relaxed [&>p]:mb-0">{children}</li>,
+  h1: ({ children }) => <h3 className="mb-2 mt-3 text-base font-semibold text-white">{children}</h3>,
+  h2: ({ children }) => <h3 className="mb-2 mt-3 text-base font-semibold text-white">{children}</h3>,
+  h3: ({ children }) => <h3 className="mb-2 mt-3 text-sm font-semibold text-white">{children}</h3>,
+  a: ({ href, children }) => (
+    <a href={href} className="text-white underline decoration-white/30 underline-offset-2" target="_blank" rel="noreferrer">
+      {children}
+    </a>
+  ),
+  code: ({ children }) => (
+    <code className="rounded-md bg-white/10 px-1.5 py-0.5 font-medium text-gray-100">{children}</code>
+  ),
+};
+
+function OlympiaMarkdown({ text }) {
+  return (
+    <div className="olympia-markdown select-text text-sm font-normal leading-relaxed text-gray-200">
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>
+        {text}
+      </ReactMarkdown>
+    </div>
+  );
+}
 
 function OlympicRings() {
   return (
@@ -94,6 +164,7 @@ function SettingToggle({ label, checked, onChange }) {
 function App() {
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState("");
+  const [smartAnswers, setSmartAnswers] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -109,6 +180,14 @@ function App() {
   const fileInputRef = useRef(null);
   const profileRef = useRef(null);
   const requestId = useRef(0);
+  const lastMessage = messages[messages.length - 1];
+  const pendingQuestions =
+    lastMessage?.role === "olympia" && !lastMessage.isError ? extractQuestions(lastMessage.text) : [];
+  const questionSignature = pendingQuestions.join("\n");
+
+  useEffect(() => {
+    setSmartAnswers({});
+  }, [questionSignature]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -151,6 +230,7 @@ function App() {
     requestId.current += 1;
     setMessages([]);
     setInputValue("");
+    setSmartAnswers({});
     clearSelectedFile();
     setIsLoading(false);
     setIsRecording(false);
@@ -236,9 +316,18 @@ function App() {
     }
   }
 
+  function composeAndSend(generalText = inputValue) {
+    const message = composeOutgoingMessage(generalText, pendingQuestions, smartAnswers);
+    if (!message.trim() || isLoading) {
+      return;
+    }
+    setSmartAnswers({});
+    handleSend(message);
+  }
+
   function onSubmit(event) {
     event.preventDefault();
-    handleSend(inputValue);
+    composeAndSend(inputValue);
   }
 
   return (
@@ -412,12 +501,40 @@ function App() {
                   className="flex justify-start"
                   role={message.isError ? "alert" : undefined}
                 >
-                  <div className="max-w-[80%] rounded-3xl border border-white/[0.05] bg-white/[0.03] px-5 py-3 text-sm font-light leading-relaxed text-gray-200 backdrop-blur-md">
-                    <p
-                      className={`m-0 select-text whitespace-pre-wrap${message.isError ? " text-red-400" : ""}`}
-                    >
-                      {message.text}
-                    </p>
+                  <div className="flex w-full max-w-[80%] flex-col gap-3">
+                    <div className="rounded-3xl border border-white/[0.05] bg-white/[0.03] px-5 py-3 text-sm leading-relaxed text-gray-200 backdrop-blur-md">
+                      {message.isError ? (
+                        <p className="m-0 select-text whitespace-pre-wrap text-red-400">{message.text}</p>
+                      ) : (
+                        <OlympiaMarkdown text={message.text} />
+                      )}
+                    </div>
+                    {index === messages.length - 1 && pendingQuestions.length > 0 ? (
+                      <div className="flex flex-col gap-2">
+                        {pendingQuestions.map((question, questionIndex) => (
+                          <input
+                            key={`${questionIndex}-${question}`}
+                            type="text"
+                            value={smartAnswers[questionIndex] ?? ""}
+                            onChange={(event) =>
+                              setSmartAnswers((current) => ({
+                                ...current,
+                                [questionIndex]: event.target.value,
+                              }))
+                            }
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                composeAndSend(inputValue);
+                              }
+                            }}
+                            placeholder={questionPlaceholder(question)}
+                            aria-label={questionPlaceholder(question)}
+                            className="w-full rounded-full border border-white/10 bg-white/[0.06] px-4 py-2.5 text-sm text-white shadow-sm placeholder:text-gray-500 focus:border-white/25 focus:outline-none"
+                          />
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 </article>
               ),

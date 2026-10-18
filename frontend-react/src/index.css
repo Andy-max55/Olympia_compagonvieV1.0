@@ -87,6 +87,18 @@
   animation: fade-in-up 0.45s ease-out both;
 }
 
+.olympia-markdown strong {
+  font-weight: 600;
+}
+
+.olympia-markdown ul {
+  list-style-type: disc;
+}
+
+.olympia-markdown ol {
+  list-style-type: decimal;
+}
+
 .glass-panel.bg-red-500\/10 {
   background-color: rgb(239 68 68 / 0.1);
   box-shadow:
