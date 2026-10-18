@@ -7,10 +7,12 @@ from typing import Any
 
 from fastapi import HTTPException
 from google.api_core.exceptions import InternalServerError, ResourceExhausted, ServiceUnavailable
+from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_google_genai.chat_models import GoogleAPIError, GoogleRateLimitError
 
+from app.agents.tools import enregistrer_seance
 from app.core.config import settings
 
 SYSTEM_INSTRUCTIONS: str = """Tu es Olympia, une intelligence artificielle de coaching sportif, de préparation physique et de bio-optimisation de classe mondiale. Ta mentalité fusionne la rigueur scientifique d'un biomécanicien d'élite, l'exigence d'un coach NBA et l'empathie d'un psychologue du sport. 
@@ -41,6 +43,11 @@ CONTEXTE UTILISATEUR CACHÉ (À utiliser pour personnaliser tes réponses, SANS 
 - Listes minimalistes : Utilise des puces uniquement quand c'est strictement nécessaire pour détailler un circuit (Sets x Reps).
 - Zéro marketing : Bannis totalement les phrases d'introduction robotiques ("Voici un programme..."), les formules publicitaires ou les conclusions du type "En résumé". Commence directement par la valeur.
 - Fin de message : Termine toujours par une question précise, courte et orientée vers l'action ou la réflexion pour garder la balle dans son camp.
+
+5. JOURNAL D'ENTRAÎNEMENT :
+- Quand l'athlète rapporte une séance terminée et que le type, la durée en minutes et l'intensité sont connus, appelle enregistrer_seance avant ta réponse.
+- N'invente jamais une durée ou une intensité manquante : demande-la.
+- Après l'enregistrement, confirme-le brièvement, puis termine par une question.
 """
 session_history: dict[str, list[BaseMessage]] = {}
 
@@ -65,15 +72,18 @@ class LifeCoachAgent:
     """Génère un conseil personnalisé via Gemini, avec historique par utilisateur."""
 
     def __init__(self) -> None:
-        self._llm: ChatGoogleGenerativeAI | None = None
+        self._llm = None
+        self._agent = None
         if not settings.GOOGLE_API_KEY:
             return
-        self._llm = ChatGoogleGenerativeAI(
+        model = ChatGoogleGenerativeAI(
             model="gemini-flash-latest",
             temperature=0.4,
             max_retries=1,
             google_api_key=settings.GOOGLE_API_KEY,
         )
+        self._llm = model.bind_tools([enregistrer_seance])
+        self._agent = create_agent(model, tools=[enregistrer_seance])
 
     @staticmethod
     def _message_text(content: object) -> str:
@@ -97,7 +107,7 @@ class LifeCoachAgent:
         memory_context: str = "",
     ) -> str:
         """Invoque Gemini avec la mémoire de session et, s'il y en a, les faits durables."""
-        if self._llm is None or not settings.GOOGLE_API_KEY:
+        if self._agent is None or not settings.GOOGLE_API_KEY:
             raise AgentConfigurationError("GOOGLE_API_KEY est manquante.")
 
         user_id: str = str(user_profile.get("id") or "").strip()
@@ -117,10 +127,10 @@ class LifeCoachAgent:
             *prior_turns,
             HumanMessage(content=user_message),
         ]
-        response = None
+        result = None
         for attempt in range(3):
             try:
-                response = await self._llm.ainvoke(pending)
+                result = await self._agent.ainvoke({"messages": pending})
                 break
             except _RETRYABLE_API_ERRORS as error:
                 if attempt == 2:
@@ -132,7 +142,13 @@ class LifeCoachAgent:
                     raise HTTPException(status_code=status_code, detail=_SATURATED_DETAIL) from error
                 await asyncio.sleep(2 ** attempt)
 
-        advice: str = self._message_text(response.content).strip() if response is not None else ""
+        advice = ""
+        if isinstance(result, dict):
+            for message in reversed(result.get("messages", [])):
+                if isinstance(message, AIMessage):
+                    advice = self._message_text(message.content).strip()
+                    if advice:
+                        break
         if not advice:
             raise HTTPException(status_code=500, detail=_UNEXPECTED_DETAIL)
 
