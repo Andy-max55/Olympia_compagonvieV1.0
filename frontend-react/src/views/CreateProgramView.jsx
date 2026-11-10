@@ -1,4 +1,5 @@
 import { useState } from "react";
+import AudioRecorder from "../components/AudioRecorder.jsx";
 
 const TITLE_FONT = { fontFamily: '"Cormorant Garamond", Georgia, serif' };
 const BODY_FONT = { fontFamily: "Inter, system-ui, sans-serif" };
@@ -10,6 +11,10 @@ function CreateProgramView() {
   function handleSubmit(event) {
     event.preventDefault();
     console.log({ programName, detailedObjective });
+  }
+
+  function handleTranscriptionResult(text) {
+    setDetailedObjective((current) => (current.trim() ? `${current.trim()} ${text}` : text));
   }
 
   return (
@@ -57,8 +62,7 @@ function CreateProgramView() {
                 rows={8}
                 className="min-h-40 w-full min-w-0 resize-y bg-transparent text-base leading-relaxed text-white outline-none placeholder:text-gray-500"
               />
-              {/* TODO: Insérer le composant AudioRecorder ici */}
-              <div className="mt-3 min-h-14 w-full rounded-2xl border border-dashed border-white/15" aria-hidden="true" />
+              <AudioRecorder onTranscriptionResult={handleTranscriptionResult} />
             </div>
           </div>
 
